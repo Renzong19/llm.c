@@ -48,8 +48,8 @@ jobs:
         with:
           name: build-files
           path: |
-            ./train_gpt2.exe
-            ./test_gpt2.exe
+            ./train_gpt2
+            ./test_gpt2
 
   build-cuda-windows:
     runs-on: windows-latest
