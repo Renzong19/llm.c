@@ -48,7 +48,7 @@ jobs:
         with:
           name: build-files
           path: |
-            ./make-bin-win64.zip
+            ./train_gpt2.exe
             ./test_gpt2.exe
 
   build-cuda-windows:
