@@ -21,10 +21,10 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-		
+        
       - name: Install dependencies
         run: pip install -r requirements.txt
-		
+        
       - name: Download Win32 Make.exe
         run: |
             $wc = New-Object System.Net.WebClient
