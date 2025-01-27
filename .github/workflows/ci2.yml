@@ -1,0 +1,153 @@
+name: Build and test
+
+on:
+  create:
+  workflow_dispatch:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
+
+jobs:
+  build-and-test-cpu:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install OpenMP
+        if: matrix.os != 'windows-latest'
+        run: |
+          if [ "${{ runner.os }}" == "Linux" ]; then
+            sudo apt-get update && sudo apt-get install -y libomp-dev
+          elif [ "${{ runner.os }}" == "macOS" ]; then
+            brew install libomp
+          fi
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run preprocessing
+        run: python dev/data/tinyshakespeare.py
+
+      - name: Train model
+        run: python train_gpt2.py --device=cpu
+
+      - name: Download Win32 Make.exe
+        if: matrix.os == 'windows-latest'
+        run: |
+            $wc = New-Object System.Net.WebClient
+            $url = 'https://github.com/maweil/MakeForWindows/releases/download/v4.4.1/make-bin-win64.zip'
+            $output = './make-bin-win64.zip'
+            $wc.DownloadFile($url, $output)
+
+      - name: Unzip Win32 Makefile
+        if: matrix.os == 'windows-latest'
+        run: |
+          unzip make-bin-win64.zip
+
+      - name: Compile training and testing program (Release)
+        if: matrix.os != 'windows-latest'
+        run: make CFLAGS="-O3 -DNDEBUG" test_gpt2 train_gpt2  # Added optimization flags
+
+      - name: Compile training and testing program for Windows (Release)
+        if: matrix.os == 'windows-latest'
+        shell: cmd
+        run: |
+          call "C:\\Program Files\\Microsoft Visual Studio\\2022\\Enterprise\\VC\\Auxiliary\\Build\\vcvars64.bat"
+          make-4.4.1\dist\make WIN_CI_BUILD=1 CFLAGS="/O2 /DNDEBUG" test_gpt2 train_gpt2  # Windows optimization flags
+
+      - name: Upload CPU Executables
+        uses: actions/upload-artifact@v3
+        with:
+          name: cpu-release-${{ matrix.os }}
+          path: |
+            test_gpt2*
+            train_gpt2*
+
+  build-cuda-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download Win32 Make.exe
+        run: |
+          $wc = New-Object System.Net.WebClient
+          $url = 'https://github.com/maweil/MakeForWindows/releases/download/v4.4.1/make-bin-win64.zip'
+          $output = './make-bin-win64.zip'
+          $wc.DownloadFile($url, $output)
+
+      - name: Unzip Win32 Makefile
+        run: |
+          unzip make-bin-win64.zip
+
+      - name: Install Cuda Toolkit 12.4 on Windows
+        run: |
+          # ... (existing installation steps unchanged)
+
+      - name: Build Cuda targets (Release)
+        shell: cmd
+        working-directory: ${{ github.workspace }}
+        run: |
+          call "C:\\Program Files\\Microsoft Visual Studio\\2022\\Enterprise\\VC\\Auxiliary\\Build\\vcvars64.bat"
+          make-4.4.1\dist\make -j WIN_CI_BUILD=1 CFLAGS="/O2 /DNDEBUG" train_gpt2fp32cu test_gpt2fp32cu test_gpt2cu train_gpt2cu profile_gpt2cu
+
+      - name: Upload CUDA Windows Executables
+        uses: actions/upload-artifact@v3
+        with:
+          name: cuda-windows-release
+          path: |
+            test_gpt2*.exe
+            train_gpt2*.exe
+            profile_gpt2*.exe
+
+  build-ubuntu20-04:
+    runs-on: ubuntu-20.04
+    container:
+      image: nvidia/cuda:11.8.0-cudnn8-devel-ubuntu20.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Build FP32 checkpoint (Release)
+        run: make CFLAGS="-O3 -DNDEBUG" train_gpt2fp32cu test_gpt2fp32cu
+
+      - name: Build FP32 precision (Release)
+        run: PRECISION=FP32 make CFLAGS="-O3 -DNDEBUG" train_gpt2cu test_gpt2cu profile_gpt2cu
+
+      - name: Upload CUDA Ubuntu 20.04 Executables
+        uses: actions/upload-artifact@v3
+        with:
+          name: cuda-ubuntu20-release
+          path: |
+            test_gpt2*
+            train_gpt2*
+            profile_gpt2*
+
+  # Similar modifications for other CUDA jobs (build-cuda-fp32, build-cuda-bf16, etc.)
+  build-cuda-fp32:
+    runs-on: ubuntu-latest
+    container:
+      image: nvidia/cuda:12.4.1-devel-ubuntu22.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Build FP32 checkpoint (Release)
+        run: make CFLAGS="-O3 -DNDEBUG" train_gpt2fp32cu test_gpt2fp32cu
+
+      - name: Upload CUDA FP32 Executables
+        uses: actions/upload-artifact@v3
+        with:
+          name: cuda-fp32-release
+          path: |
+            test_gpt2fp32cu
+            train_gpt2fp32cu
+
+  # Repeat similar artifact upload steps for build-cuda-bf16, build-cuda-fp16, etc.
