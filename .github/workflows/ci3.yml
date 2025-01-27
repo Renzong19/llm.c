@@ -112,6 +112,6 @@ jobs:
       with:
         name: cuda-build-files
         path: |
-          ./make-bin-win64.zip
-          ./test_gpt2fp32cu.exe
-          ./profile_gpt2cu.exe
+          ./train_gpt2.exe
+          ./train_gpt2fp32cu.exe
+          ./train_gpt2cu.exe
