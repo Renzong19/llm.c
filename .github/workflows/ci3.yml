@@ -1,0 +1,94 @@
+name: Build and test
+
+on:
+  create:
+  workflow_dispatch:
+  pull_request:
+    branches:
+      - master
+
+jobs:
+  build-and-test-cpu:
+    strategy:
+      matrix:
+        os: [windows-latest]
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download Win32 Make.exe
+        run: |
+            $wc = New-Object System.Net.WebClient
+            $url = 'https://github.com/maweil/MakeForWindows/releases/download/v4.4.1/make-bin-win64.zip'
+            $output = './make-bin-win64.zip'
+            $wc.DownloadFile($url, $output)
+
+      - name: Unzip Win32 Makefile
+        run: |
+          unzip make-bin-win64.zip
+
+      - name: Compile and Test
+        shell: cmd
+        run: |
+          call "C:\\Program Files\\Microsoft Visual Studio\\2022\\Enterprise\\VC\\Auxiliary\\Build\\vcvars64.bat"
+          make-4.4.1\dist\make test_gpt2
+
+      - name: Execute Testing Program
+        shell: cmd
+        run: |
+          copy test_gpt2 test_gpt2.exe
+          test_gpt2.exe
+
+      - name: Save Build Artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: build-files
+          path: |
+            ./make-bin-win64.zip
+            ./test_gpt2.exe
+
+  build-cuda-windows:
+    runs-on: windows-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Download Win32 Make.exe
+      run: |
+          $wc = New-Object System.Net.WebClient
+          $url = 'https://github.com/maweil/MakeForWindows/releases/download/v4.4.1/make-bin-win64.zip'
+          $output = './make-bin-win64.zip'
+          $wc.DownloadFile($url, $output)
+
+    - name: Unzip Win32 Makefile
+      run: |
+        unzip make-bin-win64.zip
+
+    - name: Install Cuda Toolkit 12.4 on Windows
+      run: |
+        mkdir -p "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v12.4"
+        choco install unzip -y
+        curl -O "https://developer.download.nvidia.com/compute/cuda/redist/cuda_cudart/windows-x86_64/cuda_cudart-windows-x86_64-12.4.127-archive.zip"
+        unzip '*.zip' -d "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v12.4"
+
+    - name: Add Path
+      run: |
+        echo "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v12.4\\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+    - name: Build Cuda Targets
+      shell: cmd
+      run: |
+        call "C:\\Program Files\\Microsoft Visual Studio\\2022\\Enterprise\\VC\\Auxiliary\\Build\\vcvars64.bat"
+        make-4.4.1\dist\make -j WIN_CI_BUILD=1 test_gpt2fp32cu profile_gpt2cu
+
+    - name: Save Build Artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: cuda-build-files
+        path: |
+          ./make-bin-win64.zip
+          ./test_gpt2fp32cu.exe
+          ./profile_gpt2cu.exe
