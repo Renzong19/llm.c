@@ -3,9 +3,6 @@ name: Build and output
 on:
   create:
   workflow_dispatch:
-  push:
-    branches:
-      - master
   pull_request:
     branches:
       - master
@@ -36,11 +33,15 @@ jobs:
         run: |
           unzip make-bin-win64.zip
 
+      - name: Compile training and testing program
+        if: matrix.os != 'windows-latest'
+        run: make test_gpt2 train_gpt2
+
       - name: Compile and Test
         shell: cmd
         run: |
           call "C:\\Program Files\\Microsoft Visual Studio\\2022\\Enterprise\\VC\\Auxiliary\\Build\\vcvars64.bat"
-          make-4.4.1\dist\make test_gpt2
+          make-4.4.1\dist\make WIN_CI_BUILD=1 test_gpt2 train_gpt2
 
       - name: Save Build Artifacts
         uses: actions/upload-artifact@v3
